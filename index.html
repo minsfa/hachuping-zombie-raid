@@ -1,0 +1,1196 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>하츄핑 좀비 레이드 3D - 멀티터치 조이스틱 & 디테일 무기</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: #0b0d17;
+            overflow: hidden;
+            font-family: 'Inter', sans-serif;
+            touch-action: none;
+            user-select: none;
+        }
+        canvas {
+            display: block;
+            width: 100vw;
+            height: 100vh;
+        }
+        .hud-btn {
+            background: rgba(15, 23, 42, 0.9);
+            backdrop-filter: blur(8px);
+            border: 2px solid rgba(255, 255, 255, 0.2);
+            border-radius: 14px;
+            padding: 8px 14px;
+            color: white;
+            font-size: 13px;
+            font-weight: bold;
+            transition: all 0.2s;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+        }
+        .hud-btn.active {
+            border-color: #ec4899;
+            background: rgba(236, 72, 153, 0.3);
+            box-shadow: 0 0 15px rgba(236, 72, 153, 0.5);
+        }
+    </style>
+</head>
+<body class="relative">
+
+    <div class="absolute top-4 left-4 right-4 flex justify-between items-center pointer-events-none z-10">
+        <div class="bg-slate-900/85 backdrop-blur-md border border-pink-500/40 px-4 py-2 rounded-2xl text-white shadow-lg">
+            <div class="flex items-center gap-2 mb-1">
+                <span class="text-pink-400 font-bold text-sm">🤖 하츄핑 로봇 HP</span>
+                <span id="playerHpText" class="text-xs font-semibold">200 / 200</span>
+            </div>
+            <div class="w-32 bg-slate-700 h-2.5 rounded-full overflow-hidden">
+                <div id="playerHpBar" class="bg-pink-500 h-full w-full transition-all duration-300"></div>
+            </div>
+            <div class="flex justify-between items-center mt-1 text-[11px]">
+                <span class="text-amber-300 font-bold">🪙 코인: <span id="coinText">0</span>원</span>
+                <span id="timeStatusText" class="text-cyan-300 font-bold">☀️ 낮 (3분)</span>
+            </div>
+        </div>
+
+        <div class="bg-slate-900/85 backdrop-blur-md border border-indigo-500/40 px-4 py-2 rounded-2xl text-white text-center shadow-lg">
+            <div id="waveTitleText" class="text-xs text-indigo-300 font-semibold">3D 폐허 전장</div>
+            <div id="waveText" class="text-lg font-bold text-indigo-400">Wave 1</div>
+        </div>
+
+        <div class="bg-slate-900/85 backdrop-blur-md border border-emerald-500/40 px-4 py-2 rounded-2xl text-white text-right shadow-lg">
+            <div class="text-xs text-emerald-300 font-semibold">전쟁 로봇 / 구조 시민</div>
+            <div class="flex gap-2 text-sm font-bold justify-end">
+                <span class="text-emerald-400">🤖 <span id="minionCountText">0</span></span>
+                <span class="text-cyan-400">👥 <span id="citizenCountText">0</span></span>
+            </div>
+        </div>
+    </div>
+
+    <div class="absolute bottom-6 left-1/2 transform -translate-x-1/2 flex gap-2 z-20 pointer-events-auto items-center flex-wrap justify-center">
+        <button id="weapon1Btn" onclick="switchWeapon(1)" class="hud-btn active flex items-center gap-1 text-xs">
+            <span>🔫 ㄱ자 권총</span>
+            <span class="text-[10px] text-slate-300">(0.6초/20)</span>
+        </button>
+        <button id="weapon2Btn" onclick="switchWeapon(2)" class="hud-btn flex items-center gap-1 text-xs">
+            <span>🔥 미니건</span>
+            <span class="text-[10px] text-slate-300">(0.2초/10)</span>
+        </button>
+        <button id="weapon3Btn" onclick="switchWeapon(3)" class="hud-btn hidden text-xs border-cyan-500 text-cyan-300">
+            <span>⚡ 에너지건</span>
+            <span class="text-[10px] text-slate-300">(0.5초/50)</span>
+        </button>
+        <button onclick="openShop()" class="hud-btn border-amber-500 bg-amber-950/40 text-amber-300 flex items-center gap-1 text-xs">
+            <span>🛒 상점</span>
+        </button>
+        <button onclick="openVillainChat()" class="hud-btn border-purple-500 bg-purple-950/40 text-purple-300 flex items-center gap-1 text-xs">
+            <span>💬 악당 대화</span>
+        </button>
+    </div>
+
+    <div id="intermissionBanner" class="absolute top-24 left-1/2 transform -translate-x-1/2 bg-amber-500/90 text-slate-950 font-bold px-6 py-2 rounded-full shadow-lg backdrop-blur-sm z-20 hidden text-sm sm:text-base animate-pulse">
+        ⏳ 다음 웨이브 준비 중... <span id="intermissionTimerText">10</span>초 후 좀비 습격!
+    </div>
+
+    <div id="shopModal" class="absolute inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center z-40 hidden pointer-events-auto">
+        <div class="bg-slate-900 border border-amber-500/60 p-6 rounded-3xl max-w-md w-full mx-4 shadow-2xl text-white">
+            <div class="flex items-center justify-between mb-4">
+                <div class="flex items-center gap-3">
+                    <div class="text-3xl">🛒</div>
+                    <div>
+                        <h3 class="font-bold text-amber-400 text-lg">생존 보급 상점</h3>
+                        <p class="text-xs text-slate-400">코인으로 3D 장비와 부하 강화</p>
+                    </div>
+                </div>
+                <button onclick="closeShop()" class="text-slate-400 hover:text-white font-bold text-lg">✕</button>
+            </div>
+            <div class="space-y-3 mb-5 max-h-[60vh] overflow-y-auto pr-1">
+                <div class="bg-slate-950/80 p-3.5 rounded-xl border border-slate-800 flex justify-between items-center">
+                    <div>
+                        <div class="font-bold text-sm text-pink-400">⚡ 로봇 이동 속도 강화</div>
+                        <div class="text-[11px] text-slate-400">기동성을 +0.06 증가시킵니다.</div>
+                    </div>
+                    <button onclick="buyItem('speed')" class="px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white font-bold rounded-xl text-xs transition">50코인</button>
+                </div>
+                <div class="bg-slate-950/80 p-3.5 rounded-xl border border-slate-800 flex justify-between items-center">
+                    <div>
+                        <div class="font-bold text-sm text-pink-400">💖 최대 HP 회복 & 증가</div>
+                        <div class="text-[11px] text-slate-400">최대 체력을 +50 늘리고 완전 회복!</div>
+                    </div>
+                    <button onclick="buyItem('hp')" class="px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white font-bold rounded-xl text-xs transition">80코인</button>
+                </div>
+                <div class="bg-slate-950/80 p-3.5 rounded-xl border border-slate-800 flex justify-between items-center">
+                    <div>
+                        <div class="font-bold text-sm text-pink-400">🤖 전쟁 로봇 부하 추가</div>
+                        <div class="text-[11px] text-slate-400">즉시 하츄핑형 전쟁 로봇 1기를 배치합니다.</div>
+                    </div>
+                    <button onclick="buyItem('minion')" class="px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white font-bold rounded-xl text-xs transition">100코인</button>
+                </div>
+                <div class="bg-slate-950/80 p-3.5 rounded-xl border border-slate-800 flex justify-between items-center">
+                    <div>
+                        <div class="font-bold text-sm text-cyan-400">⚡ 미래형 에너지건 해제</div>
+                        <div class="text-[11px] text-slate-400">공격력 50, 발사간격 0.5초의 강력한 무기!</div>
+                    </div>
+                    <button onclick="buyItem('lasergun')" class="px-4 py-2 bg-cyan-600 hover:bg-cyan-500 text-white font-bold rounded-xl text-xs transition">200코인</button>
+                </div>
+            </div>
+            <div id="shopMsg" class="text-center text-xs text-amber-300 h-5 mb-2 font-semibold"></div>
+            <button onclick="closeShop()" class="w-full py-3 bg-slate-800 hover:bg-slate-700 text-white font-bold rounded-xl text-xs transition">상점 닫기</button>
+        </div>
+    </div>
+
+    <div id="villainModal" class="absolute inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center z-40 hidden pointer-events-auto">
+        <div class="bg-slate-900 border border-purple-500/60 p-6 rounded-3xl max-w-md w-full mx-4 shadow-2xl text-white">
+            <div class="flex items-center gap-3 mb-4">
+                <div class="text-4xl">🦹‍♂️</div>
+                <div>
+                    <h3 class="font-bold text-purple-400 text-lg">암흑의 악당 수괴</h3>
+                    <p class="text-xs text-slate-400">폐허 도시의 지배자</p>
+                </div>
+            </div>
+            <div id="villainDialogueText" class="bg-slate-950/80 p-4 rounded-xl border border-slate-800 text-sm text-slate-200 mb-4 min-h-[80px] leading-relaxed">
+                "크크크... 낮에는 좀비들이 느리겠지만, 밤이 찾아오는 순간 모든 좀비들이 붉은 눈을 번뜩이며 폭주할 것이다! 과연 끝까지 살아남을 수 있겠느냐?"
+            </div>
+            <div class="space-y-2 mb-3">
+                <button onclick="villainReply(1)" class="w-full text-left p-3 bg-purple-950/60 hover:bg-purple-900 border border-purple-500/40 rounded-xl text-xs text-purple-200 transition">
+                    ⚔️ 1. "낮이든 밤이든 우리의 전쟁 로봇 군단으로 네 야망을 부수겠다!"
+                </button>
+                <button onclick="villainReply(2)" class="w-full text-left p-3 bg-purple-950/60 hover:bg-purple-900 border border-purple-500/40 rounded-xl text-xs text-purple-200 transition">
+                    🌙 2. "밤이 되면 강해진다고? 우리가 상점에서 무기를 업그레이드하면 그만이다!"
+                </button>
+                <button onclick="villainReply(3)" class="w-full text-left p-3 bg-purple-950/60 hover:bg-purple-900 border border-purple-500/40 rounded-xl text-xs text-purple-200 transition">
+                    🔍 3. "이 도시를 폐허로 만든 진짜 흑막의 정체는 무엇인가?"
+                </button>
+            </div>
+            <button onclick="closeVillainChat()" class="w-full py-2.5 bg-slate-800 hover:bg-slate-700 text-white font-bold rounded-xl text-xs transition">대화 종료하기</button>
+        </div>
+    </div>
+
+    <div id="gameOverScreen" class="absolute inset-0 bg-black/85 backdrop-blur-md flex flex-col items-center justify-center z-30 hidden pointer-events-auto">
+        <div class="bg-slate-900 border border-pink-500/50 p-8 rounded-3xl text-center max-w-sm w-full mx-4 shadow-2xl text-white">
+            <div class="text-5xl mb-3">💥</div>
+            <h2 class="text-2xl font-bold mb-2">로봇 기능 정지</h2>
+            <p id="finalScoreText" class="text-pink-300 text-sm mb-6">폐허 도시에서 파괴되었습니다...</p>
+            <button onclick="restartGame()" class="w-full py-3 bg-gradient-to-r from-pink-500 to-rose-500 text-white font-bold rounded-2xl shadow-lg hover:opacity-90 transition transform active:scale-95">
+                로봇 재부팅 (5초 후 자동 재생성)
+            </button>
+        </div>
+    </div>
+
+    <div id="startScreen" class="absolute inset-0 bg-slate-950/95 backdrop-blur-md flex flex-col items-center justify-center z-30 pointer-events-auto">
+        <div class="bg-slate-900 border border-pink-500/50 p-8 rounded-3xl text-center max-w-md w-full mx-4 shadow-2xl text-white">
+            <div class="text-6xl mb-3">🤖🔫🧟🏙️</div>
+            <h1 class="text-3xl font-bold mb-2">하츄핑 좀비 레이드 3D</h1>
+            <p class="text-slate-300 text-sm mb-6 leading-relaxed">
+                • <b>왼쪽 조이스틱</b>: 드래그하여 4방향 자유 이동!<br>
+                • <b>화면 드래그 (우측 등)</b>: 360도 및 상하 수직 시점 회전!<br>
+                • <b>낮(3분)/밤(2분) 사이클</b>: 낮엔 느리고 딜 10, 밤엔 빨라지고 딜 20!<br>
+                • <b>디테일 무기 & 소품</b>: ㄱ자 권총, 미니건, 미래형 에너지건 지원!<br>
+                • <b>전쟁 로봇 부하</b>: 하츄핑형 미니 로봇들이 적으로부터 거리를 유지하며 산개 사격!<br>
+                • <b>키보드</b>: WASD/방향키 이동 · Q/E 시점 회전 · 1·2·3 무기 · B 상점 · V 악당 대화 · ESC 닫기 · Enter 시작
+            </p>
+            <button onclick="startGame()" class="w-full py-4 bg-gradient-to-r from-pink-500 to-rose-500 text-white font-bold rounded-2xl shadow-lg hover:opacity-90 transition transform active:scale-95 text-lg">
+                3D 전투 시작하기
+            </button>
+        </div>
+    </div>
+
+    <div id="joystickZone" class="absolute bottom-6 left-6 w-36 h-36 rounded-full bg-slate-800/40 border-2 border-slate-600/50 backdrop-blur-sm z-20 flex items-center justify-center pointer-events-auto">
+        <div id="joystickKnob" class="w-16 h-16 rounded-full bg-pink-500/80 shadow-lg absolute transition-transform duration-75 pointer-events-none flex items-center justify-center text-white text-xs font-bold">🕹️</div>
+    </div>
+
+    <script>
+        let audioCtx = null;
+        function initAudio() {
+            if (!audioCtx) {
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            }
+        }
+
+        function playSound(type) {
+            if (!audioCtx) return;
+            try {
+                if (audioCtx.state === 'suspended') { audioCtx.resume(); }
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+                const now = audioCtx.currentTime;
+
+                if (type === 'shoot') {
+                    osc.type = 'square';
+                    osc.frequency.setValueAtTime(400, now);
+                    osc.frequency.exponentialRampToValueAtTime(100, now + 0.1);
+                    gain.gain.setValueAtTime(0.15, now);
+                    gain.gain.linearRampToValueAtTime(0.01, now + 0.1);
+                    osc.start(now);
+                    osc.stop(now + 0.1);
+                } else if (type === 'laser') {
+                    osc.type = 'sawtooth';
+                    osc.frequency.setValueAtTime(900, now);
+                    osc.frequency.exponentialRampToValueAtTime(300, now + 0.15);
+                    gain.gain.setValueAtTime(0.2, now);
+                    gain.gain.linearRampToValueAtTime(0.01, now + 0.15);
+                    osc.start(now);
+                    osc.stop(now + 0.15);
+                } else if (type === 'zombie_die') {
+                    osc.type = 'sawtooth';
+                    osc.frequency.setValueAtTime(150, now);
+                    osc.frequency.linearRampToValueAtTime(35, now + 0.3);
+                    gain.gain.setValueAtTime(0.3, now);
+                    gain.gain.linearRampToValueAtTime(0.01, now + 0.3);
+                    osc.start(now);
+                    osc.stop(now + 0.3);
+                } else if (type === 'hit') {
+                    osc.type = 'triangle';
+                    osc.frequency.setValueAtTime(120, now);
+                    osc.frequency.linearRampToValueAtTime(40, now + 0.1);
+                    gain.gain.setValueAtTime(0.2, now);
+                    gain.gain.linearRampToValueAtTime(0.01, now + 0.1);
+                    osc.start(now);
+                    osc.stop(now + 0.1);
+                }
+            } catch (e) {
+                console.error(e);
+            }
+        }
+
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x131827);
+        scene.fog = new THREE.FogExp2(0x131827, 0.010);
+
+        const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        document.body.appendChild(renderer.domElement);
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
+        scene.add(ambientLight);
+
+        const dirLight = new THREE.DirectionalLight(0xfff5ea, 1.2);
+        dirLight.position.set(60, 140, 60);
+        dirLight.castShadow = true;
+        dirLight.shadow.mapSize.width = 2048;
+        dirLight.shadow.mapSize.height = 2048;
+        dirLight.shadow.camera.near = 0.5;
+        dirLight.shadow.camera.far = 400;
+        const d = 130;
+        dirLight.shadow.camera.left = -d;
+        dirLight.shadow.camera.right = d;
+        dirLight.shadow.camera.top = d;
+        dirLight.shadow.camera.bottom = -d;
+        scene.add(dirLight);
+
+        const groundGeo = new THREE.PlaneGeometry(600, 600);
+        const groundMat = new THREE.MeshStandardMaterial({ color: 0x22283d, roughness: 0.85 });
+        const ground = new THREE.Mesh(groundGeo, groundMat);
+        ground.rotation.x = -Math.PI / 2;
+        ground.receiveShadow = true;
+        scene.add(ground);
+
+        const gridHelper = new THREE.GridHelper(600, 60, 0x3b4468, 0x252c42);
+        gridHelper.position.y = 0.05;
+        scene.add(gridHelper);
+
+        let gameRunning = false;
+        let wave = 1;
+        let coins = 0;
+
+        let dayTimeTimer = 0;
+        const DAY_DURATION = 180;
+        const NIGHT_DURATION = 120;
+        let isNight = false;
+
+        let isIntermission = false;
+        let intermissionTimeLeft = 10;
+        let intermissionTimerInterval = null;
+
+        let currentWeapon = 1;
+        let unlockedLaser = false;
+        const weapons = {
+            1: { name: 'ㄱ자 권총', interval: 600, damage: 20, speed: 1.2, color: 0xf43f5e },
+            2: { name: '미니건', interval: 200, damage: 10, speed: 1.4, color: 0x38bdf8 },
+            3: { name: '에너지건', interval: 500, damage: 50, speed: 1.8, color: 0x22d3ee }
+        };
+
+        function createHachupingMesh(isMinion = false) {
+            const group = new THREE.Group();
+            const scale = isMinion ? 0.75 : 1.0;
+            group.scale.set(scale, scale, scale);
+
+            const bodyMat = new THREE.MeshStandardMaterial({ color: isMinion ? 0x0284c7 : 0xec4899, roughness: 0.3 });
+            const crownMat = new THREE.MeshStandardMaterial({ color: 0xfde047, metalness: 0.8 });
+            
+            const body = new THREE.Mesh(new THREE.SphereGeometry(1.5, 16, 16), bodyMat);
+            body.position.y = 1.5;
+            body.castShadow = true;
+            group.add(body);
+
+            const eyeMat = new THREE.MeshBasicMaterial({ color: 0x0f172a });
+            const leftEye = new THREE.Mesh(new THREE.SphereGeometry(0.2, 8, 8), eyeMat);
+            leftEye.position.set(0.4, 1.8, 1.35);
+            group.add(leftEye);
+            const rightEye = new THREE.Mesh(new THREE.SphereGeometry(0.2, 8, 8), eyeMat);
+            rightEye.position.set(-0.4, 1.8, 1.35);
+            group.add(rightEye);
+
+            const cheekMat = new THREE.MeshBasicMaterial({ color: 0xf43f5e });
+            const leftCheek = new THREE.Mesh(new THREE.SphereGeometry(0.25, 8, 8), cheekMat);
+            leftCheek.position.set(0.7, 1.4, 1.3);
+            group.add(leftCheek);
+            const rightCheek = new THREE.Mesh(new THREE.SphereGeometry(0.25, 8, 8), cheekMat);
+            rightCheek.position.set(-0.7, 1.4, 1.3);
+            group.add(rightCheek);
+
+            const crown = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.6, 1.2), crownMat);
+            crown.position.set(0, 2.6, 0);
+            group.add(crown);
+
+            return group;
+        }
+
+        const playerGroup = createHachupingMesh(false);
+        scene.add(playerGroup);
+
+        // 무기 모델 그룹들을 플레이어에 부착
+        const weaponContainer = new THREE.Group();
+        playerGroup.add(weaponContainer);
+
+        function updatePlayerWeaponModel() {
+            while(weaponContainer.children.length > 0) {
+                weaponContainer.remove(weaponContainer.children[0]);
+            }
+            const matDark = new THREE.MeshStandardMaterial({ color: 0x1e293b, metalness: 0.8 });
+            const matAccent = new THREE.MeshStandardMaterial({ color: 0xf43f5e, metalness: 0.6 });
+            const matEnergy = new THREE.MeshStandardMaterial({ color: 0x22d3ee, emissive: 0x0891b2 });
+
+            if (currentWeapon === 1) {
+                // ㄱ자 권총
+                const grip = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.6, 0.3), matDark);
+                grip.position.set(0.9, 1.2, 1.1);
+                grip.rotation.x = -0.3;
+                weaponContainer.add(grip);
+                const barrel = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.3, 1.0), matDark);
+                barrel.position.set(0.9, 1.5, 1.4);
+                weaponContainer.add(barrel);
+            } else if (currentWeapon === 2) {
+                // 미니건 (다중 배럴)
+                const body = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.6, 1.4), matDark);
+                body.position.set(0.9, 1.4, 1.2);
+                weaponContainer.add(body);
+                for (let i = 0; i < 3; i++) {
+                    const b = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 1.2, 8), matAccent);
+                    b.rotation.x = Math.PI / 2;
+                    b.position.set(0.75 + (i*0.18), 1.4 + ((i%2)?0.1:-0.1), 2.0);
+                    weaponContainer.add(b);
+                }
+            } else if (currentWeapon === 3) {
+                // 미래형 에너지건
+                const body = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.45, 1.6, 12), matDark);
+                body.rotation.x = Math.PI / 2;
+                body.position.set(0.9, 1.4, 1.4);
+                weaponContainer.add(body);
+                const core = new THREE.Mesh(new THREE.SphereGeometry(0.25, 12, 12), matEnergy);
+                core.position.set(0.9, 1.4, 1.9);
+                weaponContainer.add(core);
+            }
+        }
+        updatePlayerWeaponModel();
+
+        const player = {
+            x: 0,
+            z: 0,
+            speed: 0.35,
+            maxHp: 200,
+            hp: 200,
+            lastShotTime: 0
+        };
+
+        let cameraAngle = 0;
+        let cameraPitch = 0.45;
+        let cameraDist = 22;
+
+        let isCameraDragging = false;
+        let previousMousePosition = { x: 0, y: 0 };
+        let activeJoystickTouchId = null;
+        let activeCameraTouchId = null;
+
+        // --- GLOBAL FUNCTIONS ATTACHED TO WINDOW TO PREVENT REFERENCE ERRORS ---
+        window.switchWeapon = function(wId) {
+            if (wId === 3 && !unlockedLaser) return;
+            currentWeapon = wId;
+            updatePlayerWeaponModel();
+            document.getElementById('weapon1Btn').classList.toggle('active', wId === 1);
+            document.getElementById('weapon2Btn').classList.toggle('active', wId === 2);
+            document.getElementById('weapon3Btn').classList.toggle('active', wId === 3);
+        };
+
+        window.openShop = function() { 
+            document.getElementById('shopModal').classList.remove('hidden'); 
+        };
+
+        window.closeShop = function() {
+            document.getElementById('shopModal').classList.add('hidden');
+            document.getElementById('shopMsg').innerText = '';
+        };
+
+        window.buyItem = function(type) {
+            const msg = document.getElementById('shopMsg');
+            if (type === 'speed') {
+                if (coins >= 50) {
+                    coins -= 50;
+                    player.speed += 0.06;
+                    msg.innerText = '⚡ 이동 속도가 강화되었습니다!';
+                } else { msg.innerText = '❌ 코인이 부족합니다!'; }
+            } else if (type === 'hp') {
+                if (coins >= 80) {
+                    coins -= 80;
+                    player.maxHp += 50;
+                    player.hp = player.maxHp;
+                    msg.innerText = '💖 최대 체력이 증가하고 완전 회복되었습니다!';
+                } else { msg.innerText = '❌ 코인이 부족합니다!'; }
+            } else if (type === 'minion') {
+                if (coins >= 100) {
+                    coins -= 100;
+                    spawnMinion(player.x + (Math.random() - 0.5) * 6, player.z + (Math.random() - 0.5) * 6);
+                    msg.innerText = '🤖 하츄핑형 전쟁 로봇 부하가 배치되었습니다!';
+                } else { msg.innerText = '❌ 코인이 부족합니다!'; }
+            } else if (type === 'lasergun') {
+                if (unlockedLaser) { msg.innerText = '⚠️ 이미 보유한 무기입니다!'; return; }
+                if (coins >= 200) {
+                    coins -= 200;
+                    unlockedLaser = true;
+                    document.getElementById('weapon3Btn').classList.remove('hidden');
+                    window.switchWeapon(3);
+                    msg.innerText = '⚡ 미래형 에너지건을 장착했습니다!';
+                } else { msg.innerText = '❌ 코인이 부족합니다!'; }
+            }
+            document.getElementById('coinText').innerText = coins;
+        };
+
+        window.openVillainChat = function() { 
+            document.getElementById('villainModal').classList.remove('hidden'); 
+        };
+
+        window.closeVillainChat = function() { 
+            document.getElementById('villainModal').classList.add('hidden'); 
+        };
+
+        window.villainReply = function(option) {
+            const dialogue = document.getElementById('villainDialogueText');
+            if (option === 1) {
+                dialogue.innerText = "수괴: \"크하하! 낮이든 밤이든 내 좀비 군단은 멈추지 않는다! 밤이 되면 공격력이 20으로 폭증하여 너희 로봇들을 순식간에 고철로 만들어주마!\"";
+            } else if (option === 2) {
+                dialogue.innerText = "수괴: \"코인으로 상점을 털어봐라! 밤의 어둠 속에서 몰려오는 붉은 눈의 보스와 정예 좀비들의 공포를 맛보게 될 것이다!\"";
+            } else if (option === 3) {
+                dialogue.innerText = "수괴: \"이 도시는 과거 시간과 공간을 왜곡하는 장치에 의해 낮과 밤이 뒤틀렸다. 모든 생명을 거두어가는 것이 내 야망이다!\"";
+            }
+        };
+
+        window.startGame = function() {
+            initAudio();
+            document.getElementById('startScreen').classList.add('hidden');
+            document.getElementById('gameOverScreen').classList.add('hidden');
+            document.getElementById('intermissionBanner').classList.add('hidden');
+            if (intermissionTimerInterval) clearInterval(intermissionTimerInterval);
+            if (countdownInterval) clearInterval(countdownInterval);
+
+            generateEnvironment();
+            player.x = 0;
+            player.z = 0;
+            player.hp = player.maxHp;
+            dayTimeTimer = 0;
+            isNight = false;
+
+            bullets.forEach(b => scene.remove(b.mesh));
+            bullets = [];
+            zombies.forEach(z => scene.remove(z.mesh));
+            zombies = [];
+            minions.forEach(m => scene.remove(m.mesh));
+            minions = [];
+
+            wave = 1;
+            coins = 0;
+            gameRunning = true;
+            
+            startCountdown();
+        };
+
+        window.restartGame = function() { 
+            window.startGame(); 
+        };
+
+        window.addEventListener('mousedown', (e) => {
+            if (e.target.tagName === 'BUTTON' || e.target.closest('#shopModal') || e.target.closest('#villainModal') || e.target.closest('#startScreen')) return;
+            if (e.clientX < window.innerWidth / 2 && e.target.closest('#joystickZone')) return;
+            isCameraDragging = true;
+            previousMousePosition = { x: e.clientX, y: e.clientY };
+        });
+        window.addEventListener('mousemove', (e) => {
+            if (!isCameraDragging) return;
+            const deltaX = e.clientX - previousMousePosition.x;
+            const deltaY = e.clientY - previousMousePosition.y;
+            cameraAngle -= deltaX * 0.008;
+            cameraPitch = Math.max(0.1, Math.min(1.3, cameraPitch + deltaY * 0.008));
+            previousMousePosition = { x: e.clientX, y: e.clientY };
+        });
+        window.addEventListener('mouseup', () => { isCameraDragging = false; });
+
+        // 멀티터치 분리 (좌측 반경: 조이스틱, 우측 반경: 카메라 회전)
+        window.addEventListener('touchstart', (e) => {
+            if (e.target.tagName === 'BUTTON' || e.target.closest('#shopModal') || e.target.closest('#villainModal') || e.target.closest('#startScreen')) return;
+            
+            for (let i = 0; i < e.changedTouches.length; i++) {
+                const touch = e.changedTouches[i];
+                if (touch.clientX < window.innerWidth / 2 && activeJoystickTouchId === null) {
+                    activeJoystickTouchId = touch.identifier;
+                    handleJoystick(touch);
+                } else if (touch.clientX >= window.innerWidth / 2 && activeCameraTouchId === null) {
+                    activeCameraTouchId = touch.identifier;
+                    previousMousePosition = { x: touch.clientX, y: touch.clientY };
+                }
+            }
+        });
+
+        window.addEventListener('touchmove', (e) => {
+            for (let i = 0; i < e.changedTouches.length; i++) {
+                const touch = e.changedTouches[i];
+                if (touch.identifier === activeJoystickTouchId) {
+                    handleJoystick(touch);
+                } else if (touch.identifier === activeCameraTouchId) {
+                    const deltaX = touch.clientX - previousMousePosition.x;
+                    const deltaY = touch.clientY - previousMousePosition.y;
+                    cameraAngle -= deltaX * 0.008;
+                    cameraPitch = Math.max(0.1, Math.min(1.3, cameraPitch + deltaY * 0.008));
+                    previousMousePosition = { x: touch.clientX, y: touch.clientY };
+                }
+            }
+        });
+
+        window.addEventListener('touchend', (e) => {
+            for (let i = 0; i < e.changedTouches.length; i++) {
+                const touch = e.changedTouches[i];
+                if (touch.identifier === activeJoystickTouchId) {
+                    activeJoystickTouchId = null;
+                    joystickVector = { x: 0, y: 0 };
+                    joystickKnob.style.transform = `translate(0px, 0px)`;
+                }
+                if (touch.identifier === activeCameraTouchId) {
+                    activeCameraTouchId = null;
+                }
+            }
+        });
+
+        // --- 키보드 조작 (터치/마우스 조작과 공존) ---
+        const keys = new Set();
+        function anyModalOpen() {
+            return ['shopModal','villainModal'].some(id => !document.getElementById(id).classList.contains('hidden'));
+        }
+        window.addEventListener('keydown', (e) => {
+            const k = e.key.length === 1 ? e.key.toLowerCase() : e.key;
+            if (k === 'Enter') {
+                e.preventDefault();
+                if (!document.getElementById('startScreen').classList.contains('hidden')) { window.startGame(); return; }
+                if (!document.getElementById('gameOverScreen').classList.contains('hidden')) { window.restartGame(); return; }
+            }
+            if (k === 'Escape') { window.closeShop(); window.closeVillainChat(); return; }
+            if (!gameRunning) return;
+            if (k === 'b') { anyModalOpen() ? window.closeShop() : window.openShop(); return; }
+            if (k === 'v') { anyModalOpen() ? window.closeVillainChat() : window.openVillainChat(); return; }
+            if (k === '1' || k === '2' || k === '3') { window.switchWeapon(Number(k)); return; }
+            if (['w','a','s','d','q','e','ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(k)) {
+                keys.add(k);
+                e.preventDefault();
+            }
+        });
+        window.addEventListener('keyup', (e) => {
+            const k = e.key.length === 1 ? e.key.toLowerCase() : e.key;
+            keys.delete(k);
+        });
+        window.addEventListener('blur', () => keys.clear());
+
+        // 키 상태 → 조이스틱 벡터 (조이스틱이 쉬고 있을 때만)
+        function applyKeyboard() {
+            if (activeJoystickTouchId !== null || joystickActive) return;
+            if (anyModalOpen()) { joystickVector = { x: 0, y: 0 }; return; }
+            if (keys.has('q')) cameraAngle += 0.035;
+            if (keys.has('e')) cameraAngle -= 0.035;
+            let x = 0, y = 0;
+            if (keys.has('w') || keys.has('ArrowUp')) y -= 1;
+            if (keys.has('s') || keys.has('ArrowDown')) y += 1;
+            if (keys.has('a') || keys.has('ArrowLeft')) x -= 1;
+            if (keys.has('d') || keys.has('ArrowRight')) x += 1;
+            const len = Math.hypot(x, y);
+            joystickVector = len ? { x: x / len, y: y / len } : { x: 0, y: 0 };
+        }
+
+        let joystickActive = false;
+        let joystickVector = { x: 0, y: 0 };
+        const joystickZone = document.getElementById('joystickZone');
+        const joystickKnob = document.getElementById('joystickKnob');
+
+        joystickZone.addEventListener('mousedown', (e) => {
+            joystickActive = true;
+            handleMouseJoystick(e);
+        });
+        window.addEventListener('mousemove', (e) => {
+            if (!joystickActive) return;
+            handleMouseJoystick(e);
+        });
+        window.addEventListener('mouseup', () => {
+            if (joystickActive) {
+                joystickActive = false;
+                joystickVector = { x: 0, y: 0 };
+                joystickKnob.style.transform = `translate(0px, 0px)`;
+            }
+        });
+
+        function handleJoystick(touch) {
+            const rect = joystickZone.getBoundingClientRect();
+            const centerX = rect.left + rect.width / 2;
+            const centerY = rect.top + rect.height / 2;
+            const dx = touch.clientX - centerX;
+            const dy = touch.clientY - centerY;
+            const dist = Math.hypot(dx, dy);
+            const maxRadius = 45;
+
+            const angle = Math.atan2(dy, dx);
+            const clampedDist = Math.min(dist, maxRadius);
+            const knobX = Math.cos(angle) * clampedDist;
+            const knobY = Math.sin(angle) * clampedDist;
+
+            joystickKnob.style.transform = `translate(${knobX}px, ${knobY}px)`;
+            joystickVector = { x: knobX / maxRadius, y: knobY / maxRadius };
+        }
+
+        function handleMouseJoystick(e) {
+            const rect = joystickZone.getBoundingClientRect();
+            const centerX = rect.left + rect.width / 2;
+            const centerY = rect.top + rect.height / 2;
+            const dx = e.clientX - centerX;
+            const dy = e.clientY - centerY;
+            const dist = Math.hypot(dx, dy);
+            const maxRadius = 45;
+
+            const angle = Math.atan2(dy, dx);
+            const clampedDist = Math.min(dist, maxRadius);
+            const knobX = Math.cos(angle) * clampedDist;
+            const knobY = Math.sin(angle) * clampedDist;
+
+            joystickKnob.style.transform = `translate(${knobX}px, ${knobY}px)`;
+            joystickVector = { x: knobX / maxRadius, y: knobY / maxRadius };
+        }
+
+        let obstacles = [];
+        let zombies = [];
+        let minions = [];
+        let citizens = [];
+        let bullets = [];
+
+        let countdownTimeLeft = 5;
+        let isCountingDown = false;
+        let countdownInterval = null;
+
+        function generateEnvironment() {
+            obstacles.forEach(obs => scene.remove(obs.mesh));
+            obstacles = [];
+
+            const buildingMats = [
+                new THREE.MeshStandardMaterial({ color: 0x222838, roughness: 0.8 }),
+                new THREE.MeshStandardMaterial({ color: 0x2a3148, roughness: 0.8 }),
+                new THREE.MeshStandardMaterial({ color: 0x1c2230, roughness: 0.8 })
+            ];
+
+            // 폐허 도시 건물 및 벽 소품 생성
+            for (let i = 0; i < 40; i++) {
+                const w = 8 + Math.random() * 14;
+                const h = 10 + Math.random() * 25;
+                const d = 8 + Math.random() * 14;
+                const x = (Math.random() - 0.5) * 260;
+                const z = (Math.random() - 0.5) * 260;
+
+                if (Math.hypot(x, z) < 25) continue;
+
+                const geo = new THREE.BoxGeometry(w, h, d);
+                const mat = buildingMats[Math.floor(Math.random() * buildingMats.length)];
+                const mesh = new THREE.Mesh(geo, mat);
+                mesh.position.set(x, h / 2, z);
+                mesh.castShadow = true;
+                mesh.receiveShadow = true;
+                scene.add(mesh);
+
+                obstacles.push({ x, z, w, d, mesh });
+            }
+
+            // 시민 생성 (원형 실루엣 오브젝트)
+            citizens.forEach(c => scene.remove(c.mesh));
+            citizens = [];
+            const citizenMat = new THREE.MeshStandardMaterial({ color: 0x38bdf8, roughness: 0.5 });
+            for (let i = 0; i < 15; i++) {
+                const x = (Math.random() - 0.5) * 240;
+                const z = (Math.random() - 0.5) * 240;
+                const mesh = new THREE.Mesh(new THREE.SphereGeometry(1.0, 16, 16), citizenMat);
+                mesh.position.set(x, 1.0, z);
+                mesh.castShadow = true;
+                scene.add(mesh);
+
+                citizens.push({
+                    x, z, mesh,
+                    speed: 0.12,
+                    wanderAngle: Math.random() * Math.PI * 2,
+                    wanderTimer: 0
+                });
+            }
+        }
+
+
+
+
+
+        function spawnMinion(x, z) {
+            const minionGroup = createHachupingMesh(true);
+            minionGroup.position.set(x, 0, z);
+            scene.add(minionGroup);
+
+            minions.push({
+                x, z, mesh: minionGroup,
+                hp: 67,
+                maxHp: 67,
+                wanderAngle: Math.random() * Math.PI * 2,
+                wanderTimer: 0
+            });
+        }
+
+        function spawnZombie(isBoss, hp, speed, scale) {
+            const angle = Math.random() * Math.PI * 2;
+            const dist = 120 + Math.random() * 40;
+            const x = player.x + Math.cos(angle) * dist;
+            const z = player.z + Math.sin(angle) * dist;
+
+            const group = new THREE.Group();
+            const zMat = new THREE.MeshStandardMaterial({ color: isBoss ? 0x581c87 : 0x064e3b, roughness: 0.6 });
+            const headMat = new THREE.MeshStandardMaterial({ color: 0x166534, roughness: 0.5 });
+            
+            const body = new THREE.Mesh(new THREE.BoxGeometry(1.6 * scale, 2.4 * scale, 1.0 * scale), zMat);
+            body.position.y = 1.6 * scale;
+            body.castShadow = true;
+            group.add(body);
+
+            const head = new THREE.Mesh(new THREE.SphereGeometry(0.8 * scale, 12, 12), headMat);
+            head.position.set(0, 3.2 * scale, 0);
+            group.add(head);
+
+            group.position.set(x, 0, z);
+            scene.add(group);
+
+            zombies.push({
+                x, z, mesh: group,
+                hp, maxHp: hp,
+                baseSpeed: speed,
+                speed, isBoss, scale,
+                animOffset: Math.random() * 100
+            });
+        }
+
+        function spawnWaveZombies() {
+            isIntermission = false;
+            const banner = document.getElementById('intermissionBanner');
+            if (banner) banner.classList.add('hidden');
+
+            const isBossWave = (wave % 5 === 0);
+            const zombieHp = 50 + (wave - 1) * 8;
+            const zombieSpeed = isNight ? (0.22 + Math.min(wave * 0.012, 0.18)) : (0.11 + Math.min(wave * 0.008, 0.12));
+
+            if (isBossWave) {
+                const bossHp = 200 + (wave - 5) * 35;
+                spawnZombie(true, bossHp, zombieSpeed * 0.95, 2.2);
+                for (let i = 0; i < 6 + wave; i++) {
+                    spawnZombie(false, zombieHp, zombieSpeed, 1.0);
+                }
+            } else {
+                const count = 6 + wave * 4;
+                for (let i = 0; i < count; i++) {
+                    spawnZombie(false, zombieHp, zombieSpeed, 1.0);
+                }
+            }
+        }
+
+        function startIntermission() {
+            isIntermission = true;
+            intermissionTimeLeft = 10;
+            const timerText = document.getElementById('intermissionTimerText');
+            if (timerText) timerText.innerText = intermissionTimeLeft;
+            const banner = document.getElementById('intermissionBanner');
+            if (banner) banner.classList.remove('hidden');
+
+            if (intermissionTimerInterval) clearInterval(intermissionTimerInterval);
+            intermissionTimerInterval = setInterval(() => {
+                intermissionTimeLeft--;
+                if (timerText) timerText.innerText = intermissionTimeLeft;
+                if (intermissionTimeLeft <= 0) {
+                    clearInterval(intermissionTimerInterval);
+                    wave++;
+                    spawnWaveZombies();
+                }
+            }, 1000);
+        }
+
+        function startCountdown() {
+            isCountingDown = true;
+            countdownTimeLeft = 5;
+            
+            const banner = document.getElementById('intermissionBanner');
+            banner.classList.remove('hidden');
+            const bannerMsg = banner;
+            bannerMsg.innerHTML = `⏳ 전투 준비 중... <span id="intermissionTimerText">${countdownTimeLeft}</span>초 후 시작!`;
+
+            if (countdownInterval) clearInterval(countdownInterval);
+            countdownInterval = setInterval(() => {
+                countdownTimeLeft--;
+                const tText = document.getElementById('intermissionTimerText');
+                if (tText) tText.innerText = countdownTimeLeft;
+                
+                if (countdownTimeLeft <= 0) {
+                    clearInterval(countdownInterval);
+                    isCountingDown = false;
+                    banner.classList.add('hidden');
+                    banner.innerHTML = `⏳ 다음 웨이브 준비 중... <span id="intermissionTimerText">10</span>초 후 좀비 습격!`;
+                    spawnWaveZombies();
+                }
+            }, 1000);
+        }
+
+        let minionAttackTimer = 0;
+
+        function updateGame(timestamp) {
+            if (!gameRunning) return;
+
+            // 카운트다운 중일 때는 좀비 스폰이나 이동 정지
+            if (isCountingDown) return;
+
+            dayTimeTimer += 0.016;
+            const totalCycle = DAY_DURATION + NIGHT_DURATION;
+            const cycleTime = dayTimeTimer % totalCycle;
+
+            if (cycleTime < DAY_DURATION) {
+                if (isNight) {
+                    isNight = false;
+                    scene.background.set(0x131827);
+                    scene.fog.color.set(0x131827);
+                    ambientLight.intensity = 0.7;
+                    dirLight.intensity = 1.2;
+                }
+                const rem = Math.ceil(DAY_DURATION - cycleTime);
+                document.getElementById('timeStatusText').innerText = `☀️ 낮 (${Math.floor(rem/60)}분 ${rem%60}초)`;
+            } else {
+                if (!isNight) {
+                    isNight = true;
+                    scene.background.set(0x05070f);
+                    scene.fog.color.set(0x05070f);
+                    ambientLight.intensity = 0.25;
+                    dirLight.intensity = 0.4;
+                }
+                const rem = Math.ceil(totalCycle - cycleTime);
+                document.getElementById('timeStatusText').innerText = `🌙 밤 (${Math.floor(rem/60)}분 ${rem%60}초)`;
+            }
+
+            applyKeyboard();
+
+            // 왼쪽 조이스틱을 통한 플레이어 이동
+            if (joystickVector.x !== 0 || joystickVector.y !== 0) {
+                const cos = Math.cos(cameraAngle);
+                const sin = Math.sin(cameraAngle);
+                
+                const moveX = joystickVector.x * cos - joystickVector.y * sin;
+                const moveZ = joystickVector.x * sin + joystickVector.y * cos;
+
+                let nextX = player.x + moveX * player.speed;
+                let nextZ = player.z + moveZ * player.speed;
+
+                let collided = false;
+                for (let obs of obstacles) {
+                    if (Math.abs(nextX - obs.x) < (obs.w / 2 + 1.2) && Math.abs(nextZ - obs.z) < (obs.d / 2 + 1.2)) {
+                        collided = true;
+                        break;
+                    }
+                }
+
+                if (!collided) {
+                    player.x = nextX;
+                    player.z = nextZ;
+                }
+                playerGroup.position.set(player.x, 0, player.z);
+                playerGroup.rotation.y = Math.atan2(moveX, moveZ);
+            }
+
+            const camH = cameraDist * Math.sin(cameraPitch);
+            const camD = cameraDist * Math.cos(cameraPitch);
+            const camTargetX = player.x - Math.sin(cameraAngle) * camD;
+            const camTargetZ = player.z - Math.cos(cameraAngle) * camD;
+            camera.position.set(camTargetX, Math.max(2, camH), camTargetZ);
+            camera.lookAt(player.x, 1.5, player.z);
+
+            // 플레이어 자동 사격
+            const activeWeapon = weapons[currentWeapon];
+            if (timestamp - player.lastShotTime >= activeWeapon.interval) {
+                let nearestZ = null;
+                let minDist = 35;
+                for (let z of zombies) {
+                    const dist = Math.hypot(z.x - player.x, z.z - player.z);
+                    if (dist < minDist) {
+                        minDist = dist;
+                        nearestZ = z;
+                    }
+                }
+
+                if (nearestZ) {
+                    const angle = Math.atan2(nearestZ.x - player.x, nearestZ.z - player.z);
+                    const bMat = new THREE.MeshBasicMaterial({ color: activeWeapon.color });
+                    const bMesh = new THREE.Mesh(new THREE.SphereGeometry(0.3, 8, 8), bMat);
+                    bMesh.position.set(player.x, 1.5, player.z);
+                    scene.add(bMesh);
+
+                    bullets.push({
+                        mesh: bMesh,
+                        x: player.x,
+                        z: player.z,
+                        vx: Math.sin(angle) * activeWeapon.speed * 2,
+                        vz: Math.cos(angle) * activeWeapon.speed * 2,
+                        damage: activeWeapon.damage
+                    });
+
+                    if (currentWeapon === 3) playSound('laser');
+                    else playSound('shoot');
+                    player.lastShotTime = timestamp;
+                }
+            }
+
+            // 부하 AI (전쟁 로봇들이 거리를 유지하며 3초마다 사격)
+            if (!minionAttackTimer) minionAttackTimer = timestamp;
+            if (timestamp - minionAttackTimer >= 3000 && minions.length > 0) {
+                minionAttackTimer = timestamp;
+                minions.forEach(m => {
+                    let targetZ = null;
+                    let mMinDist = 25;
+                    for (let z of zombies) {
+                        const dist = Math.hypot(z.x - m.x, z.z - m.z);
+                        if (dist < mMinDist) {
+                            mMinDist = dist;
+                            targetZ = z;
+                        }
+                    }
+                    if (targetZ) {
+                        const angle = Math.atan2(targetZ.x - m.x, targetZ.z - m.z);
+                        const bMat = new THREE.MeshBasicMaterial({ color: 0x38bdf8 });
+                        const bMesh = new THREE.Mesh(new THREE.SphereGeometry(0.25, 8, 8), bMat);
+                        bMesh.position.set(m.x, 1.2, m.z);
+                        scene.add(bMesh);
+
+                        bullets.push({
+                            mesh: bMesh,
+                            x: m.x,
+                            z: m.z,
+                            vx: Math.sin(angle) * 1.6,
+                            vz: Math.cos(angle) * 1.6,
+                            damage: 10
+                        });
+                        playSound('shoot');
+                    }
+                });
+            }
+
+            // 부하 이동 (좀비에게 너무 가까우면 도망치며 흩어지는 전술 AI)
+            minions.forEach(m => {
+                let closestZ = null;
+                let minDist = 20;
+                zombies.forEach(z => {
+                    const d = Math.hypot(z.x - m.x, z.z - m.z);
+                    if (d < minDist) {
+                        minDist = d;
+                        closestZ = z;
+                    }
+                });
+
+                if (closestZ) {
+                    const a = Math.atan2(closestZ.x - m.x, closestZ.z - m.z);
+                    if (minDist < 10) {
+                        m.x -= Math.sin(a) * 0.12;
+                        m.z -= Math.cos(a) * 0.12;
+                    } else if (minDist > 16) {
+                        m.x += Math.sin(a) * 0.08;
+                        m.z += Math.cos(a) * 0.08;
+                    } else {
+                        m.x += Math.sin(a + Math.PI / 2) * 0.1;
+                        m.z += Math.cos(a + Math.PI / 2) * 0.1;
+                    }
+                } else {
+                    m.wanderTimer++;
+                    if (m.wanderTimer > 100) {
+                        m.wanderAngle = Math.random() * Math.PI * 2;
+                        m.wanderTimer = 0;
+                    }
+                    m.x += Math.sin(m.wanderAngle) * 0.08;
+                    m.z += Math.cos(m.wanderAngle) * 0.08;
+                }
+                m.mesh.position.set(m.x, 0, m.z);
+            });
+
+            // 시민 이동
+            citizens.forEach(c => {
+                let nearestZDist = 999;
+                zombies.forEach(z => {
+                    const d = Math.hypot(z.x - c.x, z.z - c.z);
+                    if (d < nearestZDist) nearestZDist = d;
+                });
+
+                if (nearestZDist < 15) {
+                    let closestZ = zombies.reduce((prev, curr) => Math.hypot(curr.x - c.x, curr.z - c.z) < Math.hypot(prev.x - c.x, prev.z - c.z) ? curr : prev);
+                    const escapeAngle = Math.atan2(c.x - closestZ.x, c.z - closestZ.z);
+                    c.x += Math.sin(escapeAngle) * (c.speed * 1.5);
+                    c.z += Math.cos(escapeAngle) * (c.speed * 1.5);
+                } else {
+                    c.wanderTimer++;
+                    if (c.wanderTimer > 120) {
+                        c.wanderAngle = Math.random() * Math.PI * 2;
+                        c.wanderTimer = 0;
+                    }
+                    c.x += Math.sin(c.wanderAngle) * c.speed;
+                    c.z += Math.cos(c.wanderAngle) * c.speed;
+                }
+                c.mesh.position.set(c.x, 1, c.z);
+            });
+
+            // 총알 업데이트
+            for (let i = bullets.length - 1; i >= 0; i--) {
+                let b = bullets[i];
+                b.x += b.vx;
+                b.z += b.vz;
+                b.mesh.position.set(b.x, 1.5, b.z);
+
+                let removed = false;
+                for (let j = zombies.length - 1; j >= 0; j--) {
+                    let z = zombies[j];
+                    if (Math.hypot(b.x - z.x, b.z - z.z) < (z.scale * 1.2)) {
+                        removed = true;
+                        scene.remove(b.mesh);
+                        bullets.splice(i, 1);
+
+                        z.hp -= b.damage;
+                        if (z.hp <= 0) {
+                            coins += z.isBoss ? 60 : 15;
+                            playSound('zombie_die');
+                            scene.remove(z.mesh);
+                            zombies.splice(j, 1);
+
+                            if (!z.isBoss && minions.length < 12) {
+                                spawnMinion(z.x, z.z); // 좀비가 맞고 쓰러지면 아군 하츄핑 부하로 전환됨
+                            }
+                        }
+                        break;
+                    }
+                }
+
+                if (!removed && Math.hypot(b.x, b.z) > 200) {
+                    scene.remove(b.mesh);
+                    bullets.splice(i, 1);
+                }
+            }
+
+            // 좀비 업데이트
+            for (let i = zombies.length - 1; i >= 0; i--) {
+                let z = zombies[i];
+                z.animOffset += 0.1;
+                const currentSpd = isNight ? z.baseSpeed * 1.6 : z.baseSpeed;
+                const angle = Math.atan2(player.x - z.x, player.z - z.z);
+
+                let zNextX = z.x + Math.sin(angle) * currentSpd;
+                let zNextZ = z.z + Math.cos(angle) * currentSpd;
+
+                let zCollided = false;
+                for (let obs of obstacles) {
+                    if (Math.abs(zNextX - obs.x) < (obs.w / 2 + z.scale) && Math.abs(zNextZ - obs.z) < (obs.d / 2 + z.scale)) {
+                        zCollided = true;
+                        break;
+                    }
+                }
+
+                if (!zCollided) {
+                    z.x = zNextX;
+                    z.z = zNextZ;
+                }
+                z.mesh.position.set(z.x, 0, z.z);
+                z.mesh.rotation.y = angle;
+
+                if (Math.hypot(player.x - z.x, player.z - z.z) < (1.5 + z.scale)) {
+                    const dmg = isNight ? 20 : 10;
+                    player.hp -= dmg;
+                    playSound('hit');
+                    z.x -= Math.sin(angle) * 3;
+                    z.z -= Math.cos(angle) * 3;
+
+                    if (player.hp <= 0) {
+                        player.hp = 0;
+                        gameRunning = false;
+                        document.getElementById('gameOverScreen').classList.remove('hidden');
+                        document.getElementById('finalScoreText').innerText = `도달한 웨이브: Wave ${wave} | 전쟁 로봇 부하: ${minions.length}기`;
+
+                        setTimeout(() => {
+                            if (!gameRunning && document.getElementById('gameOverScreen').classList.contains('hidden') === false) {
+                                zombies.forEach(zz => scene.remove(zz.mesh));
+                                zombies = [];
+                                bullets.forEach(bb => scene.remove(bb.mesh));
+                                bullets = [];
+                                player.x = 0; player.z = 0;
+                                playerGroup.position.set(0, 0, 0);
+                                player.hp = player.maxHp;
+                                gameRunning = true;
+                                document.getElementById('gameOverScreen').classList.add('hidden');
+                                startIntermission();
+                            }
+                        }, 5000);
+                    }
+                }
+            }
+
+            if (zombies.length === 0 && !isIntermission) {
+                if (wave >= 30) {
+                    document.getElementById('gameOverScreen').classList.remove('hidden');
+                    document.getElementById('finalScoreText').innerHTML = `🎉 축하합니다! 3D 폐허 도시를 완전 평정하셨습니다!<br>전쟁 로봇 부하: ${minions.length}기`;
+                    gameRunning = false;
+                } else {
+                    startIntermission();
+                }
+            }
+
+            document.getElementById('playerHpText').innerText = `${player.hp} / ${player.maxHp}`;
+            document.getElementById('playerHpBar').style.width = `${Math.max(0, (player.hp / player.maxHp) * 100)}%`;
+            document.getElementById('coinText').innerText = coins;
+            document.getElementById('waveText').innerText = (wave % 5 === 0) ? `Wave ${wave} (BOSS)` : `Wave ${wave}`;
+            document.getElementById('minionCountText').innerText = minions.length;
+            document.getElementById('citizenCountText').innerText = citizens.length;
+        }
+
+        function animate(timestamp) {
+            requestAnimationFrame(animate);
+            updateGame(timestamp);
+            renderer.render(scene, camera);
+        }
+
+        window.onload = function () {
+            requestAnimationFrame(animate);
+        };
+    </script>
+</body>
+</html>
