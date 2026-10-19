@@ -5,7 +5,8 @@
 
 ## 실행
 
-`index.html`을 더블클릭해서 브라우저로 연다. 설치할 것 없음.
+- 폰·PC 어디서든: https://minsfa.github.io/hachuping-zombie-raid/
+- 로컬: `index.html`을 더블클릭해서 브라우저로 연다. 설치할 것 없음.
 
 ## 조작
 
